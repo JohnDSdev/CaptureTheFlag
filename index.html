@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CAPTURE — Official Rulebook</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --red: #e63946;
+      --black: #0d0d0d;
+      --cream: #f5f0e8;
+      --dark-cream: #e8e0d0;
+      --charcoal: #1a1a1a;
+      --mid: #3a3a3a;
+      --accent-red: #ff2d3b;
+      --accent-dark: #8b0000;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--cream);
+      color: var(--black);
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: 18px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* NOISE TEXTURE OVERLAY */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0.4;
+    }
+
+    /* HERO */
+    .hero {
+      min-height: 100vh;
+      background: var(--black);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      padding: 60px 20px;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: 
+        radial-gradient(ellipse 60% 40% at 20% 50%, rgba(230, 57, 70, 0.15) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 60% at 80% 30%, rgba(139, 0, 0, 0.1) 0%, transparent 60%);
+    }
+
+    .hero-flag-left, .hero-flag-right {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      opacity: 0.3;
+    }
+    .hero-flag-left { left: 40px; background: var(--red); animation: pulse 3s ease-in-out infinite; }
+    .hero-flag-right { right: 40px; background: #fff; animation: pulse 3s ease-in-out infinite 1.5s; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.2; transform: scaleY(1); }
+      50% { opacity: 0.5; transform: scaleY(1.02); }
+    }
+
+    .hero-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      color: var(--red);
+      text-transform: uppercase;
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeUp 0.8s ease 0.2s forwards;
+    }
+
+    .hero-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(100px, 18vw, 220px);
+      color: var(--cream);
+      line-height: 0.85;
+      letter-spacing: -0.01em;
+      text-align: center;
+      opacity: 0;
+      animation: fadeUp 0.8s ease 0.4s forwards;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-title span {
+      color: var(--red);
+      display: block;
+    }
+
+    .hero-sub {
+      font-family: 'Crimson Pro', serif;
+      font-style: italic;
+      font-size: clamp(16px, 2.5vw, 22px);
+      color: rgba(245, 240, 232, 0.6);
+      margin-top: 32px;
+      text-align: center;
+      max-width: 500px;
+      opacity: 0;
+      animation: fadeUp 0.8s ease 0.6s forwards;
+    }
+
+    .hero-meta {
+      position: absolute;
+      bottom: 40px;
+      display: flex;
+      gap: 48px;
+      opacity: 0;
+      animation: fadeUp 0.8s ease 0.8s forwards;
+    }
+
+    .meta-item {
+      text-align: center;
+      color: rgba(245, 240, 232, 0.5);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .meta-item strong {
+      display: block;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px;
+      color: var(--cream);
+      letter-spacing: 0.05em;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* NAV STRIP */
+    .nav-strip {
+      background: var(--black);
+      border-bottom: 1px solid rgba(230, 57, 70, 0.3);
+      padding: 0 40px;
+      display: flex;
+      gap: 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      overflow-x: auto;
+    }
+
+    .nav-strip a {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(245, 240, 232, 0.5);
+      text-decoration: none;
+      padding: 16px 20px;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .nav-strip a:hover {
+      color: var(--cream);
+      border-bottom-color: var(--red);
+    }
+
+    /* SECTIONS */
+    section {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 100px 40px;
+    }
+
+    .section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--red);
+      opacity: 0.3;
+      max-width: 80px;
+    }
+
+    .section-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(48px, 6vw, 80px);
+      line-height: 0.9;
+      color: var(--black);
+      margin-bottom: 48px;
+      letter-spacing: 0.01em;
+    }
+
+    /* OVERVIEW */
+    #overview .overview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      background: var(--black);
+      border: 2px solid var(--black);
+    }
+
+    .overview-card {
+      background: var(--cream);
+      padding: 40px;
+      position: relative;
+      transition: background 0.2s;
+    }
+
+    .overview-card:hover { background: var(--dark-cream); }
+
+    .overview-card .card-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 80px;
+      color: rgba(0,0,0,0.06);
+      position: absolute;
+      top: 10px;
+      right: 20px;
+      line-height: 1;
+    }
+
+    .overview-card h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+      color: var(--black);
+    }
+
+    .overview-card p {
+      color: var(--mid);
+      font-size: 17px;
+    }
+
+    /* WIN CONDITION */
+    .win-box {
+      background: var(--black);
+      color: var(--cream);
+      padding: 60px;
+      margin-top: 60px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .win-box::before {
+      content: '🏁';
+      position: absolute;
+      right: 40px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 120px;
+      opacity: 0.1;
+    }
+
+    .win-box .win-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 16px;
+    }
+
+    .win-box p {
+      font-size: clamp(18px, 2.5vw, 24px);
+      line-height: 1.5;
+      max-width: 600px;
+      color: rgba(245, 240, 232, 0.85);
+    }
+
+    /* ROLES */
+    #roles { background: var(--black); max-width: 100%; padding: 100px 0; }
+
+    #roles .inner { max-width: 1100px; margin: 0 auto; padding: 0 40px; }
+
+    #roles .section-label { color: var(--red); }
+    #roles .section-title { color: var(--cream); }
+
+    .roles-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      background: rgba(255,255,255,0.1);
+    }
+
+    .role-card {
+      background: var(--charcoal);
+      padding: 48px 36px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.3s ease;
+    }
+
+    .role-card:hover { transform: translateY(-4px); }
+
+    .role-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+    }
+
+    .role-card.guardian::before { background: #4ecdc4; }
+    .role-card.runner::before { background: var(--red); }
+    .role-card.hunter::before { background: #f7b731; }
+
+    .role-icon {
+      font-size: 48px;
+      margin-bottom: 24px;
+      display: block;
+    }
+
+    .role-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 42px;
+      letter-spacing: 0.05em;
+      color: var(--cream);
+      margin-bottom: 8px;
+    }
+
+    .role-count {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .role-card.guardian .role-count { color: #4ecdc4; }
+    .role-card.runner .role-count { color: var(--red); }
+    .role-card.hunter .role-count { color: #f7b731; }
+
+    .role-desc {
+      color: rgba(245, 240, 232, 0.7);
+      font-size: 16px;
+      line-height: 1.65;
+      margin-bottom: 24px;
+    }
+
+    .role-abilities {
+      list-style: none;
+    }
+
+    .role-abilities li {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: rgba(245, 240, 232, 0.5);
+      padding: 8px 0;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .role-abilities li::before { content: '→'; color: rgba(255,255,255,0.2); flex-shrink: 0; }
+
+    /* CARD SYSTEM */
+    #cards { position: relative; overflow: hidden; }
+
+    .cards-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: start;
+    }
+
+    .card-visual {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .playing-card {
+      background: white;
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 8px;
+      padding: 20px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: default;
+    }
+
+    .playing-card:hover {
+      transform: translateY(-2px) rotate(1deg);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+
+    .playing-card.red-suit { color: var(--red); }
+    .playing-card.black-suit { color: var(--black); }
+    .playing-card.ace-card {
+      background: linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 100%);
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .card-rank {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 36px;
+      line-height: 1;
+    }
+
+    .card-suit { font-size: 28px; }
+
+    .card-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 2px;
+      font-weight: 500;
+    }
+
+    .label-special { background: #f7b731; color: var(--black); }
+    .label-number { background: #eee; color: var(--black); }
+    .label-ace { background: var(--red); color: white; }
+
+    .cards-info h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 32px;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+      margin-top: 40px;
+      color: var(--black);
+    }
+
+    .cards-info h3:first-child { margin-top: 0; }
+
+    .cards-info p {
+      color: var(--mid);
+      margin-bottom: 12px;
+      font-size: 17px;
+    }
+
+    .stat-row {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .stat-row .stat-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 36px;
+      color: var(--red);
+      line-height: 1;
+    }
+
+    .stat-row .stat-desc {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--mid);
+    }
+
+    /* CHAOS CLAUSE */
+    #chaos { background: var(--red); max-width: 100%; padding: 100px 0; }
+    #chaos .inner { max-width: 1100px; margin: 0 auto; padding: 0 40px; }
+    #chaos .section-label { color: rgba(0,0,0,0.5); }
+    #chaos .section-label::after { background: rgba(0,0,0,0.3); }
+    #chaos .section-title { color: white; }
+
+    .chaos-content {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+
+    .chaos-text p {
+      color: rgba(255,255,255,0.85);
+      font-size: 19px;
+      line-height: 1.65;
+      margin-bottom: 20px;
+    }
+
+    .chaos-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .chaos-step {
+      background: rgba(0,0,0,0.15);
+      padding: 24px 28px;
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      transition: background 0.2s;
+    }
+
+    .chaos-step:hover { background: rgba(0,0,0,0.25); }
+
+    .step-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 48px;
+      color: rgba(255,255,255,0.2);
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .step-text {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.8);
+      padding-top: 8px;
+      line-height: 1.6;
+      text-transform: uppercase;
+    }
+
+    /* COMMS */
+    #comms .comms-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2px;
+      background: var(--black);
+      margin-top: 48px;
+    }
+
+    .comm-card {
+      background: var(--cream);
+      padding: 40px;
+      transition: background 0.2s;
+    }
+
+    .comm-card:hover { background: var(--dark-cream); }
+
+    .comm-icon { font-size: 32px; margin-bottom: 16px; }
+
+    .comm-card h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 26px;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .comm-card p {
+      color: var(--mid);
+      font-size: 16px;
+    }
+
+    /* STRATEGY */
+    #strategy .strategy-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+    }
+
+    .strategy-block {
+      border-left: 3px solid var(--red);
+      padding-left: 28px;
+    }
+
+    .strategy-block h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+
+    .strategy-block p {
+      color: var(--mid);
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    /* DATE BANNER */
+    .date-banner {
+      background: var(--black);
+      color: var(--cream);
+      text-align: center;
+      padding: 80px 40px;
+    }
+
+    .date-banner .date-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 20px;
+    }
+
+    .date-banner .date-big {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(60px, 10vw, 120px);
+      line-height: 0.9;
+      letter-spacing: 0.02em;
+    }
+
+    .date-banner .date-detail {
+      font-style: italic;
+      color: rgba(245, 240, 232, 0.5);
+      margin-top: 20px;
+      font-size: 20px;
+    }
+
+    /* FOOTER */
+    footer {
+      background: var(--black);
+      border-top: 1px solid rgba(230, 57, 70, 0.2);
+      padding: 40px;
+      text-align: center;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(245, 240, 232, 0.2);
+    }
+
+    /* DIVIDER */
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(0,0,0,0.15), transparent);
+      margin: 0;
+    }
+
+    /* SCROLL FADE IN */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      #overview .overview-grid { grid-template-columns: 1fr; }
+      .roles-grid { grid-template-columns: 1fr; }
+      .cards-layout { grid-template-columns: 1fr; }
+      .chaos-content { grid-template-columns: 1fr; }
+      #comms .comms-grid { grid-template-columns: 1fr; }
+      #strategy .strategy-layout { grid-template-columns: 1fr; }
+      .hero-meta { gap: 24px; flex-wrap: wrap; justify-content: center; }
+      .hero-flag-left, .hero-flag-right { display: none; }
+      section { padding: 70px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-flag-left"></div>
+    <div class="hero-flag-right"></div>
+    <p class="hero-eyebrow">Official Rulebook · March 2026</p>
+    <h1 class="hero-title">CAP<span>TURE</span></h1>
+    <p class="hero-sub">A strategic outdoor battle of flags, cards, and calculated chaos.</p>
+    <div class="hero-meta">
+      <div class="meta-item"><strong>12</strong>Players</div>
+      <div class="meta-item"><strong>2</strong>Teams</div>
+      <div class="meta-item"><strong>3</strong>Roles</div>
+      <div class="meta-item"><strong>3H</strong>Duration</div>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <nav class="nav-strip">
+    <a href="#overview">Overview</a>
+    <a href="#roles">Roles</a>
+    <a href="#cards">Card System</a>
+    <a href="#chaos">Chaos Clause</a>
+    <a href="#comms">Comms</a>
+    <a href="#strategy">Strategy</a>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="fade-in">
+      <p class="section-label">01 — Overview</p>
+      <h2 class="section-title">THE BASICS</h2>
+    </div>
+    <div class="overview-grid fade-in">
+      <div class="overview-card">
+        <span class="card-num">01</span>
+        <h3>Two Teams</h3>
+        <p>Six players per side — Team Red vs Team Black. Each team has a captain who coordinates strategy and role distribution before the game begins.</p>
+      </div>
+      <div class="overview-card">
+        <span class="card-num">02</span>
+        <h3>Three Roles</h3>
+        <p>Each team fields two Guardians, two Runners, and two Hunters. Roles are assigned before the game starts. Choose wisely — they can't be changed mid-game.</p>
+      </div>
+      <div class="overview-card">
+        <span class="card-num">03</span>
+        <h3>Two Flags Each</h3>
+        <p>Each team protects two flags at separate bases. Each base can hold a maximum of two flags at once — your own plus one captured.</p>
+      </div>
+      <div class="overview-card">
+        <span class="card-num">04</span>
+        <h3>Card Duels</h3>
+        <p>Confrontations between players are resolved through a card game. Your card hand is your lifeline — lose too many and you become vulnerable.</p>
+      </div>
+    </div>
+    <div class="win-box fade-in">
+      <p class="win-label">Win Condition</p>
+      <p>Capture <em>both</em> of the opposing team's flags and secure them equally across your two bases. One flag per base. First team to achieve this wins.</p>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ROLES -->
+  <div id="roles">
+    <div class="inner">
+      <div class="fade-in">
+        <p class="section-label">02 — Roles</p>
+        <h2 class="section-title">KNOW YOUR<br>POSITION</h2>
+      </div>
+      <div class="roles-grid fade-in">
+
+        <div class="role-card guardian">
+          <span class="role-icon">🛡️</span>
+          <div class="role-name">Guardian</div>
+          <div class="role-count">2 per team</div>
+          <p class="role-desc">The last line of defense. A Guardian's world is their flag — they stay with it at all times, watching and waiting for runners to dare approach.</p>
+          <ul class="role-abilities">
+            <li>Stays at their assigned flag at all times</li>
+            <li>If their flag is taken, relocates to guard the remaining flag</li>
+            <li>Can tag and capture both Runners AND Hunters who enter the base</li>
+            <li>Only role with the ability to take down Hunters</li>
+          </ul>
+        </div>
+
+        <div class="role-card runner">
+          <span class="role-icon">🏃</span>
+          <div class="role-name">Runner</div>
+          <div class="role-count">2 per team</div>
+          <p class="role-desc">Speed and stealth. Runners are the offensive backbone of the team — they venture into enemy territory and bring flags home.</p>
+          <ul class="role-abilities">
+            <li>Primary goal: capture enemy flags and return them to your base</li>
+            <li>Can only carry one flag at a time</li>
+            <li>Each base can hold max two flags (your own + one captured)</li>
+            <li>Vulnerable to Hunters in open field</li>
+          </ul>
+        </div>
+
+        <div class="role-card hunter">
+          <span class="role-icon">🎯</span>
+          <div class="role-name">Hunter</div>
+          <div class="role-count">2 per team</div>
+          <p class="role-desc">The enforcer. Hunters roam the field targeting enemy Runners, stopping captures before they happen through card game duels.</p>
+          <ul class="role-abilities">
+            <li>Tags and initiates card duels with enemy Runners</li>
+            <li>If Hunter wins duel: Runner is escorted to a base as a prisoner</li>
+            <li>Prisoner must stay inactive until freed by a teammate tag</li>
+            <li>Freeing teammate requires the savior to have at least 2 cards</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- CARD SYSTEM -->
+  <section id="cards">
+    <div class="fade-in">
+      <p class="section-label">03 — Card System</p>
+      <h2 class="section-title">THE CARDS</h2>
+    </div>
+    <div class="cards-layout">
+      <div class="card-visual fade-in">
+        <div class="playing-card ace-card">
+          <div>
+            <div class="card-rank">A</div>
+          </div>
+          <div class="card-suit">♠</div>
+          <span class="card-label label-ace">AUTO-WIN</span>
+        </div>
+        <div class="playing-card black-suit">
+          <div>
+            <div class="card-rank">K</div>
+          </div>
+          <div class="card-suit">♣</div>
+          <span class="card-label label-special">Special</span>
+        </div>
+        <div class="playing-card red-suit">
+          <div>
+            <div class="card-rank">Q</div>
+          </div>
+          <div class="card-suit">♥</div>
+          <span class="card-label label-special">Special</span>
+        </div>
+        <div class="playing-card black-suit">
+          <div>
+            <div class="card-rank">7</div>
+          </div>
+          <div class="card-suit">♠</div>
+          <span class="card-label label-number">Number</span>
+        </div>
+        <div class="playing-card red-suit">
+          <div>
+            <div class="card-rank">3</div>
+          </div>
+          <div class="card-suit">♦</div>
+          <span class="card-label label-number">Number</span>
+        </div>
+      </div>
+
+      <div class="cards-info fade-in">
+        <h3>Team Distribution</h3>
+        <p>One team plays all black cards, the other all red. A full deck of 52 cards is split evenly — 26 per team.</p>
+
+        <div class="stat-row">
+          <span class="stat-num">4</span>
+          <span class="stat-desc">Aces set aside with the flags — not in player hands</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-num">24</span>
+          <span class="stat-desc">Cards distributed among the 6 players</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-num">3+2</span>
+          <span class="stat-desc">Cards per player: 3 number cards + 2 specials (J, Q, K)</span>
+        </div>
+
+        <h3>How Duels Work</h3>
+        <p>Both players secretly choose a card, then reveal simultaneously. Higher card wins. Ties are replayed until there's a winner. The winner takes any one card they want from the loser.</p>
+
+        <h3>The Aces</h3>
+        <p>Each ace is stored with a flag. When a Runner captures that flag, they also acquire the ace — a one-time automatic win card. Use it wisely. After use, it functions as a 1 (the lowest possible card).</p>
+
+        <h3>Running Out of Cards</h3>
+        <p>No cards = instant loss if tagged. You cannot be saved by a teammate unless they have at least 2 cards to spare — and they must hand you one upon freeing you.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHAOS CLAUSE -->
+  <div id="chaos">
+    <div class="inner">
+      <div class="fade-in">
+        <p class="section-label">04 — Special Rule</p>
+        <h2 class="section-title">THE CHAOS<br>CLAUSE</h2>
+      </div>
+      <div class="chaos-content">
+        <div class="chaos-text fade-in">
+          <p>When all of a team's flags have been taken from their bases — but haven't been secured in enemy bases yet — the game enters a frantic scramble mode.</p>
+          <p>Every player on the losing team drops their assigned role and becomes a Runner/Hunter hybrid, doing whatever it takes to reclaim at least one flag.</p>
+          <p>Roles return to normal the moment they successfully win a duel against a flag carrier and recover a flag.</p>
+        </div>
+        <div class="chaos-steps fade-in">
+          <div class="chaos-step">
+            <span class="step-num">1</span>
+            <span class="step-text">Both flags are taken from your bases but not yet secured at enemy bases</span>
+          </div>
+          <div class="chaos-step">
+            <span class="step-num">2</span>
+            <span class="step-text">All players on your team become Runner/Hunter hybrids instantly</span>
+          </div>
+          <div class="chaos-step">
+            <span class="step-num">3</span>
+            <span class="step-text">Win a duel against a flag carrier to reclaim the flag</span>
+          </div>
+          <div class="chaos-step">
+            <span class="step-num">4</span>
+            <span class="step-text">Roles return to normal once a flag is recovered</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMMS -->
+  <section id="comms">
+    <div class="fade-in">
+      <p class="section-label">05 — Communication</p>
+      <h2 class="section-title">TEAM COMMS</h2>
+      <p style="color: var(--mid); max-width: 600px; font-size: 19px;">Players will have access to real-time text communication during the game. This is a massive strategic advantage — use it.</p>
+    </div>
+    <div class="comms-grid fade-in">
+      <div class="comm-card">
+        <div class="comm-icon">📍</div>
+        <h3>Flag Intel</h3>
+        <p>The moment a runner grabs a flag, alert the whole team so Guardians can reposition and Hunters can run interference on their path home.</p>
+      </div>
+      <div class="comm-card">
+        <div class="comm-icon">🔒</div>
+        <h3>Prisoner Tracking</h3>
+        <p>Hunters should broadcast which base they're escorting prisoners to, so teammates know exactly where to go for the rescue.</p>
+      </div>
+      <div class="comm-card">
+        <div class="comm-icon">⚡</div>
+        <h3>Chaos Calls</h3>
+        <p>If the Chaos Clause kicks in, coordinate a counter immediately through the gc instead of everyone panicking and improvising solo.</p>
+      </div>
+      <div class="comm-card">
+        <div class="comm-icon">🎖️</div>
+        <h3>Captain's Command</h3>
+        <p>The captain should act as a field general — tracking the situation and issuing coordinated plays rather than just playing their own role.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- STRATEGY -->
+  <section id="strategy">
+    <div class="fade-in">
+      <p class="section-label">06 — Strategy</p>
+      <h2 class="section-title">HOW TO<br>ACTUALLY WIN</h2>
+    </div>
+    <div class="strategy-layout fade-in">
+      <div class="strategy-block">
+        <h3>Double Up on One Flag First</h3>
+        <p>Send both Runners after the same flag to begin with. Get it secured at a base, then go for the second. Splitting up is how you lose flags you already captured.</p>
+      </div>
+      <div class="strategy-block">
+        <h3>Hunters Should Intercept, Not Camp</h3>
+        <p>Shadow enemy Runners aggressively in the field. Waiting at base is reactive and slow — catch them mid-run before they reach your flags.</p>
+      </div>
+      <div class="strategy-block">
+        <h3>Card Economy is Everything</h3>
+        <p>Don't blow high cards early, but don't hoard so hard that you lose duels and bleed cards anyway. Losing cards is essentially losing health.</p>
+      </div>
+      <div class="strategy-block">
+        <h3>Save the Ace for a Critical Moment</h3>
+        <p>An ace is irresistible, but using it early turns it into a worthless 1. Hold it for a duel that actually matters — a flag on the line, a prisoner break, a last stand.</p>
+      </div>
+      <div class="strategy-block">
+        <h3>Card-Check Before Rescues</h3>
+        <p>Only attempt a prisoner rescue if you have at least 2 cards. A failed or card-broke rescue attempt just adds another prisoner to the pile.</p>
+      </div>
+      <div class="strategy-block">
+        <h3>Guardians Are More Offensive Than You Think</h3>
+        <p>Guardians can tag Hunters too — which is uniquely powerful. Use them aggressively when enemies enter the base, don't just stand there watching.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DATE BANNER -->
+  <div class="date-banner">
+    <p class="date-label">See you on the battlefield</p>
+    <div class="date-big">MARCH<br>8, 2026</div>
+    <p class="date-detail">1:00 PM — 4:00 PM</p>
+  </div>
+
+  <footer>
+    CAPTURE · Official Rulebook · All rules subject to captain's discretion
+  </footer>
+
+  <script>
+    // Scroll fade in
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+  </script>
+
+</body>
+</html>
+
