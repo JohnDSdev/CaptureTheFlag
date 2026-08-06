@@ -1,0 +1,458 @@
+name: Build Olauncher Font Picker
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Clone Olauncher v6.7.1
+        run: git clone --depth 1 --branch v6.7.1 https://github.com/tanujnotes/Olauncher.git olauncher
+
+      - name: Download bundled fonts
+        run: |
+          curl -L --fail -o matrix.zip https://github.com/FriedOrange/MatrixSans/releases/download/v1.722/MatrixSans-v1.722.zip
+          unzip -q matrix.zip -d matrix-fonts
+          curl -L --fail -o ubuntu.zip https://github.com/canonical/Ubuntu-Sans-fonts/releases/download/v1.006/UbuntuSans-fonts-1.006.zip
+          unzip -q ubuntu.zip -d ubuntu-fonts
+
+      - name: Add font resources and licenses
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p olauncher/app/src/main/res/font
+          mkdir -p olauncher/app/src/main/res/values
+          mkdir -p olauncher/app/src/main/assets/licenses
+
+          cp matrix-fonts/fonts/ttf/MatrixSans-Regular.ttf olauncher/app/src/main/res/font/matrix_sans_regular.ttf
+          cp matrix-fonts/fonts/ttf/MatrixSansPrint-Regular.ttf olauncher/app/src/main/res/font/matrix_sans_print.ttf
+          cp matrix-fonts/fonts/ttf/MatrixSansScreen-Regular.ttf olauncher/app/src/main/res/font/matrix_sans_screen.ttf
+          cp matrix-fonts/fonts/ttf/MatrixSansVideo-Regular.ttf olauncher/app/src/main/res/font/matrix_sans_video.ttf
+
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = list(Path('ubuntu-fonts').rglob('*.ttf'))
+          preferred = [p for p in candidates if p.name == 'UbuntuSans-Regular.ttf']
+          if not preferred:
+              preferred = [p for p in candidates if p.name.startswith('UbuntuSans') and 'Italic' not in p.name and '[' not in p.name and 'Regular' in p.name]
+          if not preferred:
+              preferred = [p for p in candidates if p.name.startswith('UbuntuSans') and 'Italic' not in p.name]
+          if not preferred:
+              raise SystemExit('Ubuntu Sans font file not found')
+          target = Path('olauncher/app/src/main/res/font/ubuntu_sans_regular.ttf')
+          target.write_bytes(preferred[0].read_bytes())
+          print('Using Ubuntu Sans:', preferred[0])
+          PY
+
+          cp matrix-fonts/OFL.txt olauncher/app/src/main/assets/licenses/MATRIX_SANS_OFL.txt
+          UBUNTU_LICENSE="$(find ubuntu-fonts -type f \( -iname 'LICENCE.txt' -o -iname 'LICENSE.txt' \) | head -n 1)"
+          test -n "$UBUNTU_LICENSE"
+          cp "$UBUNTU_LICENSE" olauncher/app/src/main/assets/licenses/UBUNTU_FONT_LICENCE.txt
+
+          cat > olauncher/app/src/main/res/values/font_ids.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <item name="font_applied_tag" type="id" />
+          </resources>
+          EOF
+
+      - name: Add runtime font manager
+        run: |
+          cat > olauncher/app/src/main/java/app/olauncher/helper/FontManager.kt <<'EOF'
+          package app.olauncher.helper
+
+          import android.content.Context
+          import android.graphics.Typeface
+          import android.net.Uri
+          import android.os.Bundle
+          import android.provider.OpenableColumns
+          import android.view.View
+          import android.view.ViewGroup
+          import android.widget.TextView
+          import androidx.core.content.res.ResourcesCompat
+          import androidx.fragment.app.Fragment
+          import androidx.fragment.app.FragmentActivity
+          import androidx.fragment.app.FragmentManager
+          import app.olauncher.R
+          import java.io.File
+
+          object FontManager {
+              private const val PREFS_NAME = "font_preferences"
+              private const val KEY_SELECTED = "selected_font"
+              const val DEFAULT_ID = "builtin:olauncher"
+
+              data class FontOption(
+                  val id: String,
+                  val name: String,
+                  val imported: Boolean = false,
+              )
+
+              private val builtInOptions = listOf(
+                  FontOption(DEFAULT_ID, "Olauncher default"),
+                  FontOption("builtin:ubuntu", "Ubuntu Sans"),
+                  FontOption("builtin:matrix_regular", "Matrix Sans Regular"),
+                  FontOption("builtin:matrix_print", "Matrix Sans Print"),
+                  FontOption("builtin:matrix_screen", "Matrix Sans Screen"),
+                  FontOption("builtin:matrix_video", "Matrix Sans Video"),
+              )
+
+              private fun preferences(context: Context) =
+                  context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+              private fun importedDirectory(context: Context) =
+                  File(context.filesDir, "fonts").apply { mkdirs() }
+
+              fun selectedId(context: Context): String =
+                  preferences(context).getString(KEY_SELECTED, DEFAULT_ID) ?: DEFAULT_ID
+
+              fun setSelected(context: Context, id: String) {
+                  preferences(context).edit().putString(KEY_SELECTED, id).apply()
+              }
+
+              fun listOptions(context: Context): List<FontOption> {
+                  val imported = importedDirectory(context)
+                      .listFiles()
+                      .orEmpty()
+                      .filter { it.isFile && it.extension.lowercase() in setOf("ttf", "otf") }
+                      .sortedBy { it.name.lowercase() }
+                      .map { FontOption("custom:${it.name}", it.nameWithoutExtension, true) }
+                  return builtInOptions + imported
+              }
+
+              fun importedOptions(context: Context): List<FontOption> =
+                  listOptions(context).filter { it.imported }
+
+              fun selectedName(context: Context): String =
+                  listOptions(context).firstOrNull { it.id == selectedId(context) }?.name
+                      ?: builtInOptions.first().name
+
+              fun importFont(context: Context, uri: Uri): Result<FontOption> = runCatching {
+                  val resolver = context.contentResolver
+                  val displayName = resolver.query(
+                      uri,
+                      arrayOf(OpenableColumns.DISPLAY_NAME),
+                      null,
+                      null,
+                      null,
+                  )?.use { cursor ->
+                      if (cursor.moveToFirst()) cursor.getString(0) else null
+                  } ?: "Imported font.ttf"
+
+                  val suppliedExtension = displayName.substringAfterLast('.', "").lowercase()
+                  val extension = when {
+                      suppliedExtension in setOf("ttf", "otf") -> suppliedExtension
+                      resolver.getType(uri)?.contains("opentype", ignoreCase = true) == true -> "otf"
+                      else -> "ttf"
+                  }
+
+                  val rawBase = if (suppliedExtension in setOf("ttf", "otf")) {
+                      displayName.substringBeforeLast('.')
+                  } else displayName
+                  val safeBase = rawBase
+                      .replace(Regex("[^A-Za-z0-9._ -]"), "_")
+                      .trim()
+                      .ifBlank { "Imported font" }
+
+                  val directory = importedDirectory(context)
+                  var destination = File(directory, "$safeBase.$extension")
+                  var counter = 2
+                  while (destination.exists()) {
+                      destination = File(directory, "$safeBase ($counter).$extension")
+                      counter += 1
+                  }
+
+                  resolver.openInputStream(uri).use { input ->
+                      requireNotNull(input) { "Couldn't read that file." }
+                      destination.outputStream().use { output -> input.copyTo(output) }
+                  }
+
+                  try {
+                      Typeface.createFromFile(destination)
+                  } catch (error: Throwable) {
+                      destination.delete()
+                      throw IllegalArgumentException("That file is not a valid TTF or OTF font.", error)
+                  }
+
+                  val option = FontOption(
+                      id = "custom:${destination.name}",
+                      name = destination.nameWithoutExtension,
+                      imported = true,
+                  )
+                  setSelected(context, option.id)
+                  option
+              }
+
+              fun deleteFont(context: Context, id: String): Boolean {
+                  if (!id.startsWith("custom:")) return false
+                  val fileName = id.removePrefix("custom:")
+                  val deleted = File(importedDirectory(context), fileName).delete()
+                  if (selectedId(context) == id) setSelected(context, DEFAULT_ID)
+                  return deleted
+              }
+
+              private fun typeface(context: Context, id: String): Typeface {
+                  return when (id) {
+                      DEFAULT_ID -> Typeface.create("sans-serif-light", Typeface.NORMAL)
+                      "builtin:ubuntu" -> ResourcesCompat.getFont(context, R.font.ubuntu_sans_regular)
+                      "builtin:matrix_regular" -> ResourcesCompat.getFont(context, R.font.matrix_sans_regular)
+                      "builtin:matrix_print" -> ResourcesCompat.getFont(context, R.font.matrix_sans_print)
+                      "builtin:matrix_screen" -> ResourcesCompat.getFont(context, R.font.matrix_sans_screen)
+                      "builtin:matrix_video" -> ResourcesCompat.getFont(context, R.font.matrix_sans_video)
+                      else -> {
+                          if (id.startsWith("custom:")) {
+                              val file = File(importedDirectory(context), id.removePrefix("custom:"))
+                              if (file.exists()) {
+                                  try {
+                                      Typeface.createFromFile(file)
+                                  } catch (_: Throwable) {
+                                      Typeface.create("sans-serif-light", Typeface.NORMAL)
+                                  }
+                              } else Typeface.create("sans-serif-light", Typeface.NORMAL)
+                          } else Typeface.create("sans-serif-light", Typeface.NORMAL)
+                      }
+                  } ?: Typeface.create("sans-serif-light", Typeface.NORMAL)
+              }
+
+              fun install(activity: FragmentActivity, activityRoot: View) {
+                  attach(activityRoot)
+                  activity.supportFragmentManager.registerFragmentLifecycleCallbacks(
+                      object : FragmentManager.FragmentLifecycleCallbacks() {
+                          override fun onFragmentViewCreated(
+                              fm: FragmentManager,
+                              fragment: Fragment,
+                              view: View,
+                              savedInstanceState: Bundle?,
+                          ) {
+                              attach(view)
+                          }
+                      },
+                      true,
+                  )
+              }
+
+              fun attach(root: View) {
+                  root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                      applyToTree(root)
+                  }
+                  applyToTree(root)
+              }
+
+              fun applyToTree(root: View) {
+                  val id = selectedId(root.context)
+                  val fileStamp = if (id.startsWith("custom:")) {
+                      File(importedDirectory(root.context), id.removePrefix("custom:")).lastModified()
+                  } else 0L
+                  val signature = "$id:$fileStamp"
+                  applyRecursively(root, typeface(root.context, id), signature)
+              }
+
+              private fun applyRecursively(view: View, baseTypeface: Typeface, signature: String) {
+                  if (view is TextView && view.getTag(R.id.font_applied_tag) != signature) {
+                      val style = view.typeface?.style ?: Typeface.NORMAL
+                      view.typeface = Typeface.create(baseTypeface, style)
+                      view.setTag(R.id.font_applied_tag, signature)
+                  }
+                  if (view is ViewGroup) {
+                      for (index in 0 until view.childCount) {
+                          applyRecursively(view.getChildAt(index), baseTypeface, signature)
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Patch Olauncher settings and identity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          root = Path('olauncher')
+          android_ns = 'http://schemas.android.com/apk/res/android'
+          tools_ns = 'http://schemas.android.com/tools'
+          ET.register_namespace('android', android_ns)
+          ET.register_namespace('tools', tools_ns)
+          aid = lambda name: f'{{{android_ns}}}{name}'
+
+          # Add a font row immediately after the existing text-size row.
+          layout_path = root / 'app/src/main/res/layout/fragment_settings.xml'
+          tree = ET.parse(layout_path)
+          xml_root = tree.getroot()
+          inserted = False
+          for parent in xml_root.iter():
+              children = list(parent)
+              for index, child in enumerate(children):
+                  found = any(
+                      node.attrib.get(aid('id')) == '@+id/textSizeValue'
+                      for node in child.iter()
+                  )
+                  if found:
+                      frame = ET.Element('FrameLayout', {
+                          aid('layout_width'): 'match_parent',
+                          aid('layout_height'): 'wrap_content',
+                          aid('layout_marginTop'): '12dp',
+                      })
+                      ET.SubElement(frame, 'TextView', {
+                          'style': '@style/TextSmall',
+                          aid('layout_width'): 'wrap_content',
+                          aid('layout_height'): 'wrap_content',
+                          aid('layout_marginStart'): '8dp',
+                          aid('paddingVertical'): '8dp',
+                          aid('text'): '@string/font_choice',
+                          aid('textColor'): '?attr/primaryColor',
+                      })
+                      ET.SubElement(frame, 'TextView', {
+                          aid('id'): '@+id/fontValue',
+                          'style': '@style/TextSmallBold',
+                          aid('layout_width'): 'wrap_content',
+                          aid('layout_height'): 'wrap_content',
+                          aid('layout_gravity'): 'end|bottom',
+                          aid('layout_marginEnd'): '4dp',
+                          aid('padding'): '8dp',
+                          aid('text'): '@string/olauncher_default_font',
+                      })
+                      parent.insert(index + 1, frame)
+                      inserted = True
+                      break
+              if inserted:
+                  break
+          if not inserted:
+              raise SystemExit('Could not find text-size row in fragment_settings.xml')
+          tree.write(layout_path, encoding='utf-8', xml_declaration=True)
+
+          strings_path = root / 'app/src/main/res/values/strings.xml'
+          strings = strings_path.read_text()
+          additions = '''\n    <string name="font_choice">Font</string>\n    <string name="olauncher_default_font">Olauncher default</string>\n    <string name="add_font_file">Add font file…</string>\n    <string name="remove_imported_font">Remove imported font…</string>\n    <string name="font_added">Added %1$s</string>\n    <string name="font_removed">Removed %1$s</string>\n    <string name="font_import_failed">Could not add font: %1$s</string>\n'''
+          strings = strings.replace('</resources>', additions + '</resources>')
+          strings = strings.replace('<string name="app_name">Olauncher</string>', '<string name="app_name">Olauncher Fonts</string>')
+          strings_path.write_text(strings)
+
+          gradle_path = root / 'app/build.gradle'
+          gradle = gradle_path.read_text()
+          gradle = gradle.replace('applicationId "app.olauncher"', 'applicationId "app.olauncher.fontpicker"')
+          gradle = gradle.replace('versionName "v6.7.1"', 'versionName "v6.7.1-fonts1"')
+          gradle_path.write_text(gradle)
+
+          main_path = root / 'app/src/main/java/app/olauncher/MainActivity.kt'
+          main = main_path.read_text()
+          main = main.replace('import app.olauncher.helper.getColorFromAttr', 'import app.olauncher.helper.FontManager\nimport app.olauncher.helper.getColorFromAttr')
+          main = main.replace('setContentView(binding.root)\n', 'setContentView(binding.root)\n        FontManager.install(this, binding.root)\n', 1)
+          main_path.write_text(main)
+
+          settings_path = root / 'app/src/main/java/app/olauncher/ui/SettingsFragment.kt'
+          settings = settings_path.read_text()
+          settings = settings.replace('import androidx.appcompat.app.AppCompatDelegate', 'import androidx.activity.result.contract.ActivityResultContracts\nimport androidx.appcompat.app.AlertDialog\nimport androidx.appcompat.app.AppCompatDelegate')
+          settings = settings.replace('import app.olauncher.helper.animateAlpha', 'import app.olauncher.helper.FontManager\nimport app.olauncher.helper.animateAlpha')
+
+          property_anchor = '    private var showInstagram = false\n'
+          property_code = '''    private var showInstagram = false\n\n    private val fontFilePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->\n        if (uri == null) return@registerForActivityResult\n        FontManager.importFont(requireContext(), uri)\n            .onSuccess { option ->\n                requireContext().showToast(getString(R.string.font_added, option.name))\n                requireActivity().recreate()\n            }\n            .onFailure { error ->\n                requireContext().showToast(\n                    getString(R.string.font_import_failed, error.message ?: "Unknown error")\n                )\n            }\n    }\n'''
+          settings = settings.replace(property_anchor, property_code, 1)
+
+          settings = settings.replace('        populateTextSize()\n', '        populateTextSize()\n        populateFontText()\n', 1)
+          settings = settings.replace('            R.id.textSizeValue -> binding.textSizesLayout.visibility = View.VISIBLE\n', '            R.id.textSizeValue -> binding.textSizesLayout.visibility = View.VISIBLE\n            R.id.fontValue -> showFontPicker()\n', 1)
+          settings = settings.replace('        binding.textSizeValue.setOnClickListener(this)\n', '        binding.textSizeValue.setOnClickListener(this)\n        binding.fontValue.setOnClickListener(this)\n', 1)
+
+          methods = r'''
+
+              private fun populateFontText() {
+                  binding.fontValue.text = FontManager.selectedName(requireContext())
+              }
+
+              private fun showFontPicker() {
+                  val context = requireContext()
+                  val options = FontManager.listOptions(context)
+                  val importedFontsExist = options.any { it.imported }
+                  val labels = options.map { option ->
+                      if (option.id == FontManager.selectedId(context)) "✓ ${option.name}" else option.name
+                  }.toMutableList().apply {
+                      add(getString(R.string.add_font_file))
+                      if (importedFontsExist) add(getString(R.string.remove_imported_font))
+                  }
+
+                  val dialog = AlertDialog.Builder(context)
+                      .setTitle(R.string.font_choice)
+                      .setItems(labels.toTypedArray()) { _, which ->
+                          when {
+                              which < options.size -> {
+                                  FontManager.setSelected(context, options[which].id)
+                                  requireActivity().recreate()
+                              }
+                              which == options.size -> fontFilePicker.launch(arrayOf("*/*"))
+                              else -> showRemoveImportedFontDialog()
+                          }
+                      }
+                      .setNegativeButton(android.R.string.cancel, null)
+                      .create()
+                  dialog.setOnShowListener {
+                      dialog.window?.decorView?.let(FontManager::applyToTree)
+                  }
+                  dialog.show()
+              }
+
+              private fun showRemoveImportedFontDialog() {
+                  val context = requireContext()
+                  val imported = FontManager.importedOptions(context)
+                  if (imported.isEmpty()) return
+
+                  val dialog = AlertDialog.Builder(context)
+                      .setTitle(R.string.remove_imported_font)
+                      .setItems(imported.map { it.name }.toTypedArray()) { _, which ->
+                          val option = imported[which]
+                          if (FontManager.deleteFont(context, option.id)) {
+                              context.showToast(getString(R.string.font_removed, option.name))
+                              requireActivity().recreate()
+                          }
+                      }
+                      .setNegativeButton(android.R.string.cancel, null)
+                      .create()
+                  dialog.setOnShowListener {
+                      dialog.window?.decorView?.let(FontManager::applyToTree)
+                  }
+                  dialog.show()
+              }
+          '''
+          last_brace = settings.rfind('}')
+          if last_brace == -1:
+              raise SystemExit('SettingsFragment closing brace not found')
+          settings = settings[:last_brace] + methods + '\n' + settings[last_brace:]
+          settings_path.write_text(settings)
+          PY
+
+      - name: Build debug APK
+        working-directory: olauncher
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Package APK and corresponding source
+        run: |
+          cp olauncher/app/build/outputs/apk/debug/app-debug.apk Olauncher-Font-Picker-v6.7.1.apk
+          rm -rf olauncher/.git olauncher/app/build olauncher/.gradle
+          zip -qr Olauncher-Font-Picker-v6.7.1-source.zip olauncher
+          sha256sum Olauncher-Font-Picker-v6.7.1.apk Olauncher-Font-Picker-v6.7.1-source.zip > SHA256SUMS.txt
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Olauncher-Font-Picker-v6.7.1
+          path: |
+            Olauncher-Font-Picker-v6.7.1.apk
+            Olauncher-Font-Picker-v6.7.1-source.zip
+            SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
