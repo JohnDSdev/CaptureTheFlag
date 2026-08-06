@@ -49,23 +49,22 @@ jobs:
           tree = ET.parse(layout)
           xml_root = tree.getroot()
 
-          font_row = None
-          font_parent = None
-          text_size_row = None
-          text_size_parent = None
+          def smallest_container(target_id):
+              candidates = []
+              for parent in xml_root.iter():
+                  for child in list(parent):
+                      nodes = list(child.iter())
+                      ids = {node.attrib.get(aid('id')) for node in nodes}
+                      if target_id in ids and len(nodes) > 1:
+                          candidates.append((len(nodes), parent, child))
+              if not candidates:
+                  raise SystemExit(f'Could not locate container for {target_id}')
+              candidates.sort(key=lambda item: item[0])
+              _, parent, child = candidates[0]
+              return parent, child
 
-          for parent in xml_root.iter():
-              for child in list(parent):
-                  ids = {node.attrib.get(aid('id')) for node in child.iter()}
-                  if '@+id/fontValue' in ids:
-                      font_row = child
-                      font_parent = parent
-                  if '@+id/textSizeValue' in ids:
-                      text_size_row = child
-                      text_size_parent = parent
-
-          if None in (font_row, font_parent, text_size_row, text_size_parent):
-              raise SystemExit('Could not locate font or text-size row')
+          font_parent, font_row = smallest_container('@+id/fontValue')
+          text_size_parent, text_size_row = smallest_container('@+id/textSizeValue')
 
           font_parent.remove(font_row)
           font_row.set(aid('id'), '@+id/fontRow')
@@ -80,8 +79,6 @@ jobs:
           text = settings.read_text()
           text = text.replace('R.id.fontValue -> showFontPicker()', 'R.id.fontRow -> showFontPicker()')
           text = text.replace('binding.fontValue?.setOnClickListener(this)', 'binding.root.findViewById<View>(R.id.fontRow).setOnClickListener(this)')
-          text = text.replace('binding.fontValue?.text = FontManager.selectedName(requireContext())', 'binding.root.findViewById<android.widget.TextView>(R.id.fontValue).text = FontManager.selectedName(requireContext())')
-          text = text.replace('binding.fontValue.text = FontManager.selectedName(requireContext())', 'binding.root.findViewById<android.widget.TextView>(R.id.fontValue).text = FontManager.selectedName(requireContext())')
           settings.write_text(text)
           PY
 
