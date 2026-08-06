@@ -1,0 +1,114 @@
+name: Build Olauncher Font Picker v2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout temporary build files
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Clone Olauncher v6.7.1
+        run: git clone --depth 1 --branch v6.7.1 https://github.com/tanujnotes/Olauncher.git olauncher
+
+      - name: Download fonts
+        run: |
+          curl -L --fail -o matrix.zip https://github.com/FriedOrange/MatrixSans/releases/download/v1.722/MatrixSans-v1.722.zip
+          unzip -q matrix.zip -d matrix-fonts
+          curl -L --fail -o ubuntu.zip https://github.com/canonical/Ubuntu-Sans-fonts/releases/download/v1.006/UbuntuSans-fonts-1.006.zip
+          unzip -q ubuntu.zip -d ubuntu-fonts
+
+      - name: Install font resources and apply patch
+        run: |
+          mkdir -p olauncher/app/src/main/res/font
+          mkdir -p olauncher/app/src/main/res/values
+          mkdir -p olauncher/app/src/main/assets/licenses
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def exact(root, name):
+              found = list(Path(root).rglob(name))
+              if not found:
+                  raise SystemExit(f"Could not find {name} under {root}")
+              print(name, '->', found[0])
+              return found[0]
+
+          targets = {
+              'MatrixSans-Regular.ttf': 'matrix_sans_regular.ttf',
+              'MatrixSansPrint-Regular.ttf': 'matrix_sans_print.ttf',
+              'MatrixSansScreen-Regular.ttf': 'matrix_sans_screen.ttf',
+              'MatrixSansVideo-Regular.ttf': 'matrix_sans_video.ttf',
+          }
+          out = Path('olauncher/app/src/main/res/font')
+          for source_name, target_name in targets.items():
+              (out / target_name).write_bytes(exact('matrix-fonts', source_name).read_bytes())
+
+          ubuntu = list(Path('ubuntu-fonts').rglob('UbuntuSans-Regular.ttf'))
+          if not ubuntu:
+              ubuntu = [
+                  p for p in Path('ubuntu-fonts').rglob('*.ttf')
+                  if p.name.startswith('UbuntuSans') and 'Italic' not in p.name and 'Regular' in p.name
+              ]
+          if not ubuntu:
+              raise SystemExit('Could not find a regular Ubuntu Sans TTF')
+          print('Ubuntu Sans ->', ubuntu[0])
+          (out / 'ubuntu_sans_regular.ttf').write_bytes(ubuntu[0].read_bytes())
+
+          matrix_license = list(Path('matrix-fonts').rglob('OFL.txt'))
+          ubuntu_license = list(Path('ubuntu-fonts').rglob('LICENCE.txt')) + list(Path('ubuntu-fonts').rglob('LICENSE.txt'))
+          if not matrix_license or not ubuntu_license:
+              raise SystemExit('Font license file missing')
+          licenses = Path('olauncher/app/src/main/assets/licenses')
+          (licenses / 'MATRIX_SANS_OFL.txt').write_bytes(matrix_license[0].read_bytes())
+          (licenses / 'UBUNTU_FONT_LICENCE.txt').write_bytes(ubuntu_license[0].read_bytes())
+          PY
+
+          cat > olauncher/app/src/main/res/values/font_ids.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <item name="font_applied_tag" type="id" />
+          </resources>
+          EOF
+
+          cp tools/olauncher-font-picker/FontManager.kt olauncher/app/src/main/java/app/olauncher/helper/FontManager.kt
+          python3 tools/olauncher-font-picker/patch.py
+
+      - name: Build APK
+        working-directory: olauncher
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Package APK and corresponding source
+        run: |
+          cp olauncher/app/build/outputs/apk/debug/app-debug.apk Olauncher-Font-Picker-v6.7.1.apk
+          rm -rf olauncher/.git olauncher/.gradle olauncher/app/build
+          zip -qr Olauncher-Font-Picker-v6.7.1-source.zip olauncher
+          sha256sum Olauncher-Font-Picker-v6.7.1.apk Olauncher-Font-Picker-v6.7.1-source.zip > SHA256SUMS.txt
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Olauncher-Font-Picker-v6.7.1
+          path: |
+            Olauncher-Font-Picker-v6.7.1.apk
+            Olauncher-Font-Picker-v6.7.1-source.zip
+            SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
