@@ -1,0 +1,176 @@
+name: Build Olauncher Font Picker Fix
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout temporary build history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Recover previous font-picker patch
+        run: |
+          mkdir -p /tmp/olauncher-font-tools
+          git show 6d62152824bfc6c7abfde83b4b2ba081cdca6217:tools/olauncher-font-picker/FontManager.kt > /tmp/olauncher-font-tools/FontManager.kt
+          git show 6d62152824bfc6c7abfde83b4b2ba081cdca6217:tools/olauncher-font-picker/patch.py > /tmp/olauncher-font-tools/patch.py
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Clone Olauncher v6.7.1
+        run: git clone --depth 1 --branch v6.7.1 https://github.com/tanujnotes/Olauncher.git olauncher
+
+      - name: Download fonts
+        run: |
+          curl -L --fail -o matrix.zip https://github.com/FriedOrange/MatrixSans/releases/download/v1.722/MatrixSans-v1.722.zip
+          unzip -q matrix.zip -d matrix-fonts
+          curl -L --fail -o ubuntu.zip https://github.com/canonical/Ubuntu-Sans-fonts/releases/download/v1.006/UbuntuSans-fonts-1.006.zip
+          unzip -q ubuntu.zip -d ubuntu-fonts
+
+      - name: Install font resources
+        run: |
+          mkdir -p olauncher/app/src/main/res/font
+          mkdir -p olauncher/app/src/main/res/values
+          mkdir -p olauncher/app/src/main/assets/licenses
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def exact(root, name):
+              found = list(Path(root).rglob(name))
+              if not found:
+                  raise SystemExit(f"Could not find {name} under {root}")
+              return found[0]
+
+          out = Path('olauncher/app/src/main/res/font')
+          targets = {
+              'MatrixSans-Regular.ttf': 'matrix_sans_regular.ttf',
+              'MatrixSansPrint-Regular.ttf': 'matrix_sans_print.ttf',
+              'MatrixSansScreen-Regular.ttf': 'matrix_sans_screen.ttf',
+              'MatrixSansVideo-Regular.ttf': 'matrix_sans_video.ttf',
+          }
+          for source_name, target_name in targets.items():
+              (out / target_name).write_bytes(exact('matrix-fonts', source_name).read_bytes())
+
+          ubuntu = list(Path('ubuntu-fonts').rglob('UbuntuSans-Regular.ttf'))
+          if not ubuntu:
+              raise SystemExit('Could not find UbuntuSans-Regular.ttf')
+          (out / 'ubuntu_sans_regular.ttf').write_bytes(ubuntu[0].read_bytes())
+
+          matrix_license = list(Path('matrix-fonts').rglob('OFL.txt'))
+          ubuntu_license = list(Path('ubuntu-fonts').rglob('LICENCE.txt')) + list(Path('ubuntu-fonts').rglob('LICENSE.txt'))
+          if not matrix_license or not ubuntu_license:
+              raise SystemExit('Font license file missing')
+          licenses = Path('olauncher/app/src/main/assets/licenses')
+          (licenses / 'MATRIX_SANS_OFL.txt').write_bytes(matrix_license[0].read_bytes())
+          (licenses / 'UBUNTU_FONT_LICENCE.txt').write_bytes(ubuntu_license[0].read_bytes())
+          PY
+
+          cat > olauncher/app/src/main/res/values/font_ids.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <item name="font_applied_tag" type="id" />
+          </resources>
+          EOF
+
+      - name: Apply font picker and repair settings row
+        run: |
+          cp /tmp/olauncher-font-tools/FontManager.kt olauncher/app/src/main/java/app/olauncher/helper/FontManager.kt
+          cp /tmp/olauncher-font-tools/patch.py ./patch.py
+          python3 patch.py
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          layout = Path('olauncher/app/src/main/res/layout/fragment_settings.xml')
+          android_ns = 'http://schemas.android.com/apk/res/android'
+          tools_ns = 'http://schemas.android.com/tools'
+          ET.register_namespace('android', android_ns)
+          ET.register_namespace('tools', tools_ns)
+          aid = lambda name: f'{{{android_ns}}}{name}'
+
+          tree = ET.parse(layout)
+          root = tree.getroot()
+          parent = {child: node for node in root.iter() for child in node}
+
+          font_value = next(
+              node for node in root.iter()
+              if node.attrib.get(aid('id')) == '@+id/fontValue'
+          )
+          font_row = parent[font_value]
+          old_parent = parent[font_row]
+          old_parent.remove(font_row)
+
+          text_size = next(
+              node for node in root.iter()
+              if node.attrib.get(aid('id')) == '@+id/textSizeValue'
+          )
+          text_size_row = parent[text_size]
+          appearance_card = parent[text_size_row]
+          insert_at = list(appearance_card).index(text_size_row) + 1
+
+          font_row.set(aid('id'), '@+id/fontRow')
+          font_row.set(aid('clickable'), 'true')
+          font_row.set(aid('focusable'), 'true')
+          font_row.set(aid('layout_marginBottom'), '4dp')
+          appearance_card.insert(insert_at, font_row)
+          tree.write(layout, encoding='utf-8', xml_declaration=True)
+
+          settings_path = Path('olauncher/app/src/main/java/app/olauncher/ui/SettingsFragment.kt')
+          settings = settings_path.read_text()
+          settings = settings.replace(
+              'R.id.fontValue -> showFontPicker()',
+              'R.id.fontValue, R.id.fontRow -> showFontPicker()',
+          )
+          settings = settings.replace(
+              'binding.fontValue?.setOnClickListener(this)',
+              'binding.fontValue?.setOnClickListener(this)\n        binding.fontRow.setOnClickListener(this)',
+          )
+          settings_path.write_text(settings)
+
+          gradle_path = Path('olauncher/app/build.gradle')
+          gradle = gradle_path.read_text().replace(
+              'versionName "v6.7.1-fonts1"',
+              'versionName "v6.7.1-fonts2"',
+          )
+          gradle_path.write_text(gradle)
+          PY
+
+      - name: Build APK
+        working-directory: olauncher
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Package APK and source
+        run: |
+          cp olauncher/app/build/outputs/apk/debug/app-debug.apk Olauncher-Font-Picker-v6.7.1-fix.apk
+          rm -rf olauncher/.gradle olauncher/.kotlin olauncher/app/build
+          zip -qr Olauncher-Font-Picker-v6.7.1-fix-source.zip olauncher
+          sha256sum Olauncher-Font-Picker-v6.7.1-fix.apk Olauncher-Font-Picker-v6.7.1-fix-source.zip > Olauncher-Font-Picker-v6.7.1-fix-SHA256SUMS.txt
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Olauncher-Font-Picker-v6.7.1-fix
+          path: |
+            Olauncher-Font-Picker-v6.7.1-fix.apk
+            Olauncher-Font-Picker-v6.7.1-fix-source.zip
+            Olauncher-Font-Picker-v6.7.1-fix-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
