@@ -88,6 +88,8 @@ jobs:
 
           cp tools/olauncher-font-picker/FontManager.kt olauncher/app/src/main/java/app/olauncher/helper/FontManager.kt
           python3 tools/olauncher-font-picker/patch.py
+          sed -i 's/binding\.fontValue\.setOnClickListener/binding.fontValue?.setOnClickListener/' olauncher/app/src/main/java/app/olauncher/ui/SettingsFragment.kt
+          sed -i 's/binding\.fontValue\.text/binding.fontValue?.text/' olauncher/app/src/main/java/app/olauncher/ui/SettingsFragment.kt
 
       - name: Build APK
         working-directory: olauncher
