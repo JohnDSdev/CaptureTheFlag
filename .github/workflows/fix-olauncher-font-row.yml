@@ -80,6 +80,8 @@ jobs:
           text = settings.read_text()
           text = text.replace('R.id.fontValue -> showFontPicker()', 'R.id.fontRow -> showFontPicker()')
           text = text.replace('binding.fontValue?.setOnClickListener(this)', 'binding.root.findViewById<View>(R.id.fontRow).setOnClickListener(this)')
+          text = text.replace('binding.fontValue?.text = FontManager.selectedName(requireContext())', 'binding.root.findViewById<android.widget.TextView>(R.id.fontValue).text = FontManager.selectedName(requireContext())')
+          text = text.replace('binding.fontValue.text = FontManager.selectedName(requireContext())', 'binding.root.findViewById<android.widget.TextView>(R.id.fontValue).text = FontManager.selectedName(requireContext())')
           settings.write_text(text)
           PY
 
