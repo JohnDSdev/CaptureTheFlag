@@ -134,12 +134,21 @@ jobs:
           settings_path = Path('olauncher/app/src/main/java/app/olauncher/ui/SettingsFragment.kt')
           settings = settings_path.read_text()
           settings = settings.replace(
+              'binding.fontValue.setOnClickListener(this)',
+              'binding.fontValue?.setOnClickListener(this)',
+          )
+          settings = settings.replace(
+              'binding.fontValue.text = FontManager.selectedName(requireContext())',
+              'binding.fontValue?.text = FontManager.selectedName(requireContext())',
+          )
+          settings = settings.replace(
               'R.id.fontValue -> showFontPicker()',
               'R.id.fontValue, R.id.fontRow -> showFontPicker()',
           )
           settings = settings.replace(
               'binding.fontValue?.setOnClickListener(this)',
               'binding.fontValue?.setOnClickListener(this)\n        binding.fontRow.setOnClickListener(this)',
+              1,
           )
           settings_path.write_text(settings)
 
