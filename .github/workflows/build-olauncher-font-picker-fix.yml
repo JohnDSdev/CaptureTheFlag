@@ -147,7 +147,7 @@ jobs:
           )
           settings = settings.replace(
               'binding.fontValue?.setOnClickListener(this)',
-              'binding.fontValue?.setOnClickListener(this)\n        binding.fontRow.setOnClickListener(this)',
+              'binding.fontValue?.setOnClickListener(this)\n        binding.fontRow?.setOnClickListener(this)',
               1,
           )
           settings_path.write_text(settings)
